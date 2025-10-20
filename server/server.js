@@ -2,6 +2,8 @@ import express from "express";
 import pkg from "pg";
 import cors from "cors";
 import dotenv from "dotenv";
+import fs from "fs";
+import OpenAI from "openai";
 
 dotenv.config();
 
@@ -19,6 +21,26 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
   port: parseInt(process.env.DB_PORT, 10),
 });
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+
+
+async function generateTTS(text) {
+  //create TTS audio
+  const response = await openai.audio.speech.create({
+    model: "gpt-4o-mini-tts",
+    voice: "alloy",
+    input: text
+  });
+
+  //convert to Buffer
+  const arrayBuffer = await response.arrayBuffer();
+  const audioBuffer = Buffer.from(arrayBuffer);
+
+  return audioBuffer;
+}
+
 
 app.get("/api/random", async (req, res) => {
   try {
@@ -78,6 +100,21 @@ app.get("/api/board", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch board" });
+  }
+});
+
+app.post("/api/tts", async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).send("Missing 'text' field");
+
+    const audioBuffer = await generateTTS(text); // your TTS function
+
+    res.set("Content-Type", "audio/mpeg");
+    res.send(audioBuffer);
+  } catch (err) {
+    console.error("TTS error:", err);
+    res.status(500).send("TTS generation failed");
   }
 });
 
