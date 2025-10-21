@@ -30,7 +30,7 @@ async function generateTTS(text) {
   //create TTS audio
   const response = await openai.audio.speech.create({
     model: "gpt-4o-mini-tts",
-    voice: "alloy",
+    voice: "ash",
     input: text
   });
 
@@ -40,6 +40,44 @@ async function generateTTS(text) {
 
   return audioBuffer;
 }
+
+
+app.post("/api/comment", async (req, res) => {
+  try {
+    const { context, withAudio } = req.body;
+    if (!context) return res.status(400).json({ error: "Missing 'context' field" });
+
+    // Generate the host comment using OpenAI
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are a lively, witty trivia game show host." },
+        {
+          role: "user",
+          content: `Respond with one short, natural line that fits this situation: ${context}`
+        }
+      ],
+      max_tokens: 50,
+      temperature: 0.9,
+    });
+
+    const comment = completion.choices[0]?.message?.content?.trim() || "Let's keep things moving!";
+
+    // If caller wants TTS audio too
+    if (withAudio) {
+      const audioBuffer = await generateTTS(comment);
+      res.set("Content-Type", "audio/mpeg");
+      res.set("X-Comment-Text", encodeURIComponent(comment));
+      return res.send(audioBuffer);
+    }
+
+    res.json({ comment });
+
+  } catch (err) {
+    console.error("Comment generation error:", err);
+    res.status(500).json({ error: "Failed to generate host comment" });
+  }
+});
 
 
 app.get("/api/random", async (req, res) => {

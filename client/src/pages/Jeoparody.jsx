@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import levenshtein from "fast-levenshtein";
 
@@ -6,6 +6,7 @@ export default function Jeoparody() {
     // get game start data
     const location = useLocation();
     const gameData = location.state;
+    const hasPlayed = useRef(false);
 
     const [board, setBoard] = useState({});
     const [loading, setLoading] = useState(true);
@@ -28,8 +29,8 @@ export default function Jeoparody() {
     // dollar values for each row, single round
     const values = [200, 400, 600, 800, 1000];
 
-    // load board
     useEffect(() => {
+
         async function fetchBoard() {
             try {
                 const res = await fetch("http://localhost:3001/api/board");
@@ -41,7 +42,14 @@ export default function Jeoparody() {
                 setLoading(false);
             }
         }
+
+        //prevent duplicate runs due to strict mode
+        if (hasPlayed.current) return;
+        hasPlayed.current = true;
+
         fetchBoard();
+        sayTts(`Welcome to the game everyone! Today's contestants are 
+            ${gameData.opponent2.name}, ${gameData.playerName}, and, of course, our returning champion ${gameData.opponent1.name}! Let's get started with our first clue! ${gameData.opponent1.name}?`);
     }, []);
 
     const categories = Object.keys(board);
@@ -54,20 +62,14 @@ export default function Jeoparody() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ text: text }),
             });
-
             if (!response.ok) throw new Error("TTS request failed");
-
             const audioBlob = await response.blob();
             const audioUrl = URL.createObjectURL(audioBlob);
-
             const audio = new Audio(audioUrl);
-
             audio.addEventListener("ended", () => {
                 setQuestionRead(true);
             });
-
             audio.playbackRate = 1.25;
-
             await audio.play();
         } catch (err) {
             console.error("TTS error:", err);
@@ -79,7 +81,7 @@ export default function Jeoparody() {
         setSelectedQuestion(question);
         setAnswerTimeRemaining(8);
         setBuzzedIn(false);
-        sayTts(question.question);        
+        sayTts(question.question);
     }
 
     function handleBuzzIn() {
@@ -129,11 +131,17 @@ export default function Jeoparody() {
         return () => clearInterval(intervalId);
     }, [questionRead]);
 
-    function areSimilar(str1, str2, threshold = 0.85) {
+    function areSimilar(str1, str2, threshold = 0.9) {
         const distance = levenshtein.get(str1.toLowerCase(), str2.toLowerCase());
         const maxLen = Math.max(str1.length, str2.length);
         const similarity = 1 - distance / maxLen;
         return similarity >= threshold;
+    }
+
+    function getOppAnswerInfog() {
+        const opp1Knows = (gameData.opponent1.difficulty * 5 + 45) / 100 > Math.random();
+        const opp2Knows = (gameData.opponent2.difficulty * 5 + 45) / 100 > Math.random();
+        return [opp1Knows, opp2Knows];
     }
 
     return (
@@ -164,9 +172,6 @@ export default function Jeoparody() {
                                 {questionTimeRemaining}
                             </p>
                         </div>
-
-
-
                     )}
 
                     {buzzedIn && (
@@ -184,10 +189,16 @@ export default function Jeoparody() {
                             <p className="mt-2 text-4xl font-semibold text-yellow-500">
                                 {answerTimeRemaining}
                             </p>
-                            <button 
+                            <button
                                 className="mt-2 border border-2 border-yellow-400 text-xl font-semibold text-yellow-500 rounded-lg p-2 cursor-pointer hover:bg-yellow-500 hover:text-white"
                                 onClick={() => {
-                                    areSimilar(selectedQuestion.answer, answer) ? console.log("Correct") : console.log("Wrong");
+                                    setSelectedQuestion(null);
+                                    if (areSimilar(selectedQuestion.answer, answer)) {
+                                        setPlayerScore((prev) => prev + selectedQuestion.value);
+                                    } else {
+                                        setPlayerWrong(true);
+                                        setPlayerScore((prev) => prev - selectedQuestion.value);
+                                    }
                                 }}
                             >
                                 Submit
@@ -197,7 +208,7 @@ export default function Jeoparody() {
                 </div>
             ) : (
                 <div className="w-full max-w-6xl">
-                    
+
                     <div className="flex flex-col items-center mb-4">
                         <h1
                             className="text-yellow-400 uppercase text-center p-1 text-8xl"
@@ -261,7 +272,7 @@ export default function Jeoparody() {
                                         key={`cell-${colIndex}-${rowIndex}`}
                                         className="bg-[#060CE9] text-yellow-300 text-center text-3xl font-extrabold border border-yellow-400 flex items-center justify-center h-24 cursor-pointer hover:bg-[#0a14e0]"
                                         style={{ fontFamily: "Impact, 'Anton', 'Arial Black', sans-serif", textShadow: "2px 2px 3px black" }}
-                                        onClick={() => handleQuestionSelect(question)}
+                                        onClick={() => handleQuestionSelect({ ...question, value: values[rowIndex] })}
                                     >
                                         ${val}
                                     </div>

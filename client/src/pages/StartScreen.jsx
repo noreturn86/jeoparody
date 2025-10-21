@@ -101,7 +101,6 @@ export default function GameSetup() {
               className="w-full accent-yellow-400"
             />
           </div>
-          s
           <button
             type="submit"
             className="mt-4 w-full py-3 bg-yellow-400 text-[#060CE9] font-extrabold uppercase rounded-lg text-lg tracking-wider shadow-lg hover:bg-yellow-300 transition"
