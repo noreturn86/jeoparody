@@ -42,7 +42,7 @@ export default function GameSetup() {
         </h2>
 
         <form onSubmit={handleSubmit} className="flex flex-col space-y-6">
-          
+          hg
           <div>
             <label className="block text-lg mb-1 font-bold">Your Name</label>
             <input
@@ -78,7 +78,6 @@ export default function GameSetup() {
             />
           </div>
 
-          {/* Opponent 2 */}
           <div>
             <label className="block text-lg mb-1 font-bold">Opponent 2 Name</label>
             <input
@@ -102,8 +101,7 @@ export default function GameSetup() {
               className="w-full accent-yellow-400"
             />
           </div>
-
-          {/* Start Button */}
+          s
           <button
             type="submit"
             className="mt-4 w-full py-3 bg-yellow-400 text-[#060CE9] font-extrabold uppercase rounded-lg text-lg tracking-wider shadow-lg hover:bg-yellow-300 transition"
