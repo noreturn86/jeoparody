@@ -30,7 +30,7 @@ async function generateTTS(text) {
   //create TTS audio
   const response = await openai.audio.speech.create({
     model: "gpt-4o-mini-tts",
-    voice: "ash",
+    voice: "echo",
     input: text
   });
 

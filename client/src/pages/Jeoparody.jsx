@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import levenshtein from "fast-levenshtein";
+import { CheckCircle, XCircle } from "lucide-react";
+import buzzSound from "../assets/sounds/BuzzIn.wav";
+import correctSound from "../assets/sounds/correct.mp3";
+import incorrectSound from "../assets/sounds/incorrect.wav";
 
 export default function Jeoparody() {
     // get game start data
@@ -86,6 +90,8 @@ export default function Jeoparody() {
 
     function handleBuzzIn() {
         setBuzzedIn(true);
+        const audio = new Audio(buzzSound);
+        audio.play();
     }
 
     useEffect(() => {
@@ -194,8 +200,12 @@ export default function Jeoparody() {
                                 onClick={() => {
                                     setSelectedQuestion(null);
                                     if (areSimilar(selectedQuestion.answer, answer)) {
+                                        const audio = new Audio(correctSound);
+                                        audio.play();
                                         setPlayerScore((prev) => prev + selectedQuestion.value);
                                     } else {
+                                        const audio = new Audio(incorrectSound);
+                                        audio.play();
                                         setPlayerWrong(true);
                                         setPlayerScore((prev) => prev - selectedQuestion.value);
                                     }
