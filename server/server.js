@@ -74,6 +74,40 @@ app.post("/api/comment", async (req, res) => {
 });
 
 
+app.post("/api/wrong", async (req, res) => {
+  try {
+    const { question, answer } = req.body;
+
+    // AI-generated incorrect answer comment
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are a contestant on a game show who just got a question incorrect."
+        },
+        {
+          role: "user",
+          content: `The question was "${question}" and the correct answer is "${answer}". Give an incorrect answer to the question, which may be close but not correct.`
+        }
+      ],
+      max_tokens: 50,
+      temperature: 0.9,
+    });
+
+    const comment = completion.choices[0]?.message?.content?.trim() || "";
+
+    // Return as JSON
+    res.json({ comment });
+
+  } catch (err) {
+    console.error("Wrong answer comment generation error:", err);
+    res.status(500).json({ error: "Failed to generate host comment" });
+  }
+});
+
+
+
 app.get("/api/random", async (req, res) => {
   try {
     const idResult = await pool.query("SELECT MIN(id) AS min_id, MAX(id) AS max_id FROM questions");

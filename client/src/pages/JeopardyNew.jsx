@@ -19,7 +19,7 @@ const incorrect = new Audio(incorrectSound);
 const correct = new Audio(correctSound);
 const buzzIn = new Audio(buzzSound);
 
-export default function Jeoparody() {
+export default function JeopardyNew() {
     const location = useLocation();
     const gameData = location.state;
     const hasPlayed = useRef(false);
@@ -46,6 +46,8 @@ export default function Jeoparody() {
     const [playerWrong, setPlayerWrong] = useState(false);
     const [answerShown, setAnswerShown] = useState(false);
     const [answerCorrect, setAnswerCorrect] = useState(false);
+
+    const [controllingPlayer, setControllingPlayer] = useState(gameData.opponent1.name);
 
     const values = round === 1 ? [200, 400, 600, 800, 1000] : [400, 800, 1200, 1600, 2000];
 
@@ -110,7 +112,7 @@ export default function Jeoparody() {
     }, [buzzedIn]);
 
 
-
+    */
     const opponentTimerRef = useRef(null);
 
     const opponentHasBuzzedRef = useRef(false);
@@ -166,7 +168,7 @@ export default function Jeoparody() {
     }, [selectedQuestion, questionRead]);
 
 
-
+    /*
     useEffect(() => {
         if (!(opponent1BuzzedIn || opponent2BuzzedIn)) {
             return;
