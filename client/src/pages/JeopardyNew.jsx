@@ -4,6 +4,8 @@ import levenshtein from "fast-levenshtein";
 import buzzSound from "../assets/sounds/BuzzIn.wav";
 import correctSound from "../assets/sounds/correct.mp3";
 import incorrectSound from "../assets/sounds/incorrect.wav";
+import menuMoveSound from "../assets/sounds/menuMove.mp3";
+import questionSelectSound from "../assets/sounds/selectQuestion.wav";
 import avatar1 from "../assets/avatars/avatar1.png";
 import avatar2 from "../assets/avatars/avatar2.png";
 import avatar3 from "../assets/avatars/avatar3.png";
@@ -18,232 +20,240 @@ import avatar10 from "../assets/avatars/avatar10.png";
 const incorrect = new Audio(incorrectSound);
 const correct = new Audio(correctSound);
 const buzzIn = new Audio(buzzSound);
+const menuMove = new Audio(menuMoveSound);
+const questionSelect = new Audio(questionSelectSound);
+
+
 
 export default function JeopardyNew() {
+    const opponentSelectTimeoutRef = useRef(null);
+
+    const [boardLoading, setBoardLoading] = useState(false);
+    const [boardLoaded, setBoardLoaded] = useState(false);
+    const [board, setBoard] = useState({});
+    const [boardClickable, setBoardClickable] = useState(false);
+
+    const [round, setRound] = useState(1);
+
     const location = useLocation();
     const gameData = location.state;
-    const hasPlayed = useRef(false);
 
-    const [board, setBoard] = useState({});
-    const [loading, setLoading] = useState(true);
+    const [player, setPlayer] = useState({
+        name: gameData.playerName,
+        isBot: false,
+        score: 0,
+    });
+
+    const [opponent1, setOpponent1] = useState({
+        name: gameData.opponent1.name,
+        isBot: true,
+        difficulty: gameData.opponent1.difficulty,
+        score: 0,
+    });
+
+    const [opponent2, setOpponent2] = useState({
+        name: gameData.opponent2.name,
+        isBot: true,
+        difficulty: gameData.opponent2.difficulty,
+        score: 0,
+    });
+
+    const [controllingPlayer, setControllingPlayer] = useState(opponent1);
+
     const [selectedQuestion, setSelectedQuestion] = useState(null);
-
-    const [playerScore, setPlayerScore] = useState(0);
-    const [opponent1Score, setOpponent1Score] = useState(0);
-    const [opponent2Score, setOpponent2Score] = useState(0);
-
-    const [answer, setAnswer] = useState("");
-    const [wrongAnswer, setWrongAnswer] = useState();
-    const [round, setRound] = useState(1);
+    const [answerShown, setAnswerShown] = useState(false);
+    const [questionReady, setQuestionReady] = useState(false);
 
     const [buzzedIn, setBuzzedIn] = useState(false);
     const [opponent1BuzzedIn, setOpponent1BuzzedIn] = useState(false);
     const [opponent2BuzzedIn, setOpponent2BuzzedIn] = useState(false);
 
-    const [answerTimeRemaining, setAnswerTimeRemaining] = useState(8);
-    const [questionTimeRemaining, setQuestionTimeRemaining] = useState(5);
-    const [questionRead, setQuestionRead] = useState(false);
     const [playerWrong, setPlayerWrong] = useState(false);
-    const [answerShown, setAnswerShown] = useState(false);
-    const [answerCorrect, setAnswerCorrect] = useState(false);
+    const [opponent1Wrong, setOpponent1Wrong] = useState(false);
+    const [opponent2Wrong, setOpponent2Wrong] = useState(false);
 
-    const [controllingPlayer, setControllingPlayer] = useState(gameData.opponent1.name);
+    const [questionTimeRemaining, setQuestionTimeRemaining] = useState(5);
+    const [answerTimeRemaining, setAnswerTimeRemaining] = useState(10);
 
-    const values = round === 1 ? [200, 400, 600, 800, 1000] : [400, 800, 1200, 1600, 2000];
+    const [playerScore, setPlayerScore] = useState(0);
+    const [opponent1Score, setOpponent1Score] = useState(0);
+    const [opponent2Score, setOpponent2Score] = useState(0);
+    const values = round === 1 ? [200, 400, 600, 800, 1000] : round === 2 ? [400, 800, 1200, 1600, 2000] : [];
+
+    const boardLoadedRef = useRef(false);
 
     useEffect(() => {
-        async function fetchBoard() {
+        if (boardLoadedRef.current) return; //prevent double load in dev
+        boardLoadedRef.current = true;
+
+        async function loadBoard() {
+            setBoardLoading(true);
             try {
-                console.log("Fetching board...");
                 const res = await fetch("http://localhost:3001/api/board");
+                if (!res.ok) throw new Error(`Server error: ${res.status}`);
                 const data = await res.json();
-                Object.keys(data).forEach(category => {
-                    data[category] = data[category].map(q => ({
+
+                const initialized = {};
+                Object.keys(data).forEach(cat => {
+                    initialized[cat] = data[cat].map(q => ({
                         ...q,
                         wasAsked: false,
-                        category
+                        selected: false,
                     }));
                 });
-                setBoard(data);
-                setLoading(false);
-                console.log("Board loaded:", data);
+                setBoard(initialized);
             } catch (err) {
-                console.error(err);
-                setLoading(false);
+                console.error("Failed to load board:", err);
+            } finally {
+                setBoardLoading(false);
+                setBoardLoaded(true);
             }
         }
-        if (hasPlayed.current) return;
-        hasPlayed.current = true;
 
-        fetchBoard();
+        loadBoard();
+    }, []);
 
-        const greeting =
-            round === 1
-                ? `Welcome to the game everyone! Today's contestants are ${gameData.opponent2.name}, ${gameData.playerName}, and our returning champion ${gameData.opponent1.name}!`
-                : "The first round is over, introducing players to the second round.";
 
-        if (round === 1) sayTts(greeting);
-        else makeComment(greeting);
-    }, [round]);
+
+
 
     useEffect(() => {
-        setBuzzedIn(false);
-        setQuestionRead(false);
-        setPlayerWrong(false);
-    }, [selectedQuestion]);
-
-    /*
-    useEffect(() => {
-        if (!buzzedIn) return;
-        console.log("Player buzzed in");
-        const intervalId = setInterval(() => {
-            setAnswerTimeRemaining(prev => {
-                if (prev <= 1) {
-                    clearInterval(intervalId);
-                    setPlayerWrong(true);
-                    console.log("Answer time expired");
-                    return 0;
-                }
-                console.log("Answer time remaining:", prev - 1);
-                return prev - 1;
-            });
-        }, 1000);
-        return () => clearInterval(intervalId);
-    }, [buzzedIn]);
-
-
-    */
-    const opponentTimerRef = useRef(null);
-
-    const opponentHasBuzzedRef = useRef(false);
-
-    useEffect(() => {
-        if (!selectedQuestion || !questionRead) return;
-
-        // Reset buzz state tracking
-        opponentHasBuzzedRef.current = false;
-        setQuestionTimeRemaining(5);
-
-        const intervalId = setInterval(() => {
-            setQuestionTimeRemaining(prev => {
-                if (prev <= 1) {
-                    clearInterval(intervalId);
-                    incorrect.play();
-                    setAnswerShown(true);
-                    setTimeout(() => setAnswerShown(false), 2500);
-                    console.log("Question time expired, showing answer");
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-
-        //schedule opponent buzz once per question
-        const opponentBuzzInInfo = getOppAnswerInfo();
-        if (opponentBuzzInInfo) {
-            opponentTimerRef.current = setTimeout(() => {
-                if (
-                    !buzzedIn &&
-                    !opponent1BuzzedIn &&
-                    !opponent2BuzzedIn &&
-                    !opponentHasBuzzedRef.current
-                ) {
-                    opponentHasBuzzedRef.current = true;
-                    if (opponentBuzzInInfo.opponent === gameData.opponent1.name) {
-                        setOpponent1BuzzedIn(true);
-                        console.log("Opponent 1 buzzed in:", gameData.opponent1.name);
-                    } else {
-                        setOpponent2BuzzedIn(true);
-                        console.log("Opponent 2 buzzed in:", gameData.opponent2.name);
-                    }
-                    clearInterval(intervalId); //stop timerj
-                }
-            }, opponentBuzzInInfo.reactionTime);
+        if (!selectedQuestion && boardLoaded) {
+            if (controllingPlayer.isBot) {
+                setBoardClickable(false);
+                const timeoutId = setTimeout(() => {
+                    opponentQuestionSelect();
+                    clearTimeout(timeoutId);
+                }, 2000);
+            } else {
+                setBoardClickable(true);
+            }
         }
-
-        return () => {
-            clearInterval(intervalId);
-            clearTimeout(opponentTimerRef.current);
-        };
-    }, [selectedQuestion, questionRead]);
+    }, [selectedQuestion, boardLoaded]);
 
 
-    /*
     useEffect(() => {
-        if (!(opponent1BuzzedIn || opponent2BuzzedIn)) {
+
+    }, [boardLoaded]);
+
+
+
+    useEffect(() => {
+        if (!questionReady) return;
+
+        if (!playerWrong || !opponent1Wrong || !opponent2Wrong) {
+            if (!playerWrong) {
+                //activate buzzer
+                //if player buzzes in (setQuestionReady = false), start answer timer
+                //if correct, setSelectedQuestion to null, controllingPlayer = player
+                //else if incorrect or out of time
+                //reset question timer and answer time
+                //opportunity for !wrong players to buzz in (setQuestionReady = true)
+            }
+
+            if (!opponent1Wrong || !opponent2Wrong) {
+                //start opponent repsonse method
+                //if opponent buzzes in (setQuestionReady = false) and correct, setSelectedQuestion = null, controlling player = opponent => opponent setSelectedQuestion
+                //if opponent buzzes in (setQuestionReady = false) and incorrect, setOpponentWrong
+                //reset question timer
+                //opportunity for others to answer, if !wrong (setQuestion ready = true)
+            }
+        } else {
+            //everybody has tried and guessed wrong
+            //controlling player unchanged => setSelectedQuestion
+        }
+    }, [questionReady]);
+
+
+
+    function opponentQuestionSelect() {
+        // build flat list of { category, index, question } for every unasked question
+        const available = [];
+        const cats = Object.keys(board);
+
+        console.log("board: ", board);
+        console.log("cats: ", cats);
+
+        cats.forEach((cat) => {
+            const list = board[cat] || [];
+            list.forEach((q, idx) => {
+                if (!q.wasAsked) {
+                    available.push({ category: cat, index: idx, question: q });
+                }
+            });
+        });
+
+        if (available.length === 0) {
+            console.warn("Opponent selection failed — no available questions.");
             return;
         }
 
-    }, [opponent1BuzzedIn, opponent2BuzzedIn]);
+        // pick random slot
+        const pick = available[Math.floor(Math.random() * available.length)];
+        const { category, index } = pick;
+
+        // mark selected true in state immutably
+        setBoard(prev => {
+            const next = { ...prev };
+            next[category] = next[category].map((q, i) => i === index ? { ...q, selected: true } : q);
+            return next;
+        });
+
+        // schedule the actual selection after 2.5s
+        if (opponentSelectTimeoutRef.current) clearTimeout(opponentSelectTimeoutRef.current);
+        opponentSelectTimeoutRef.current = setTimeout(() => {
+            // mark wasAsked true and selected false (or keep selected false if you prefer)
+            setBoard(prev => {
+                const next = { ...prev };
+                next[category] = next[category].map((q, i) => {
+                    if (i === index) return { ...q, wasAsked: true, selected: false };
+                    return q;
+                });
+                return next;
+            });
+
+            // setSelectedQuestion with a clone so downstream effects see a new object
+            const selected = { ...board[category][index], category, value: values[index] };
+            setSelectedQuestion(selected);
+
+            opponentSelectTimeoutRef.current = null;
+        }, 2500);
+    }
 
 
-    useEffect(() => {
-        if (!selectedQuestion) return;
+    function handlePlayerQuestionSelect(category, rowIndex) {
+        // mark selected in state (highlight immediately)
+        setBoard(prev => {
+            const next = { ...prev };
+            next[category] = next[category].map((q, i) => i === rowIndex ? { ...q, selected: true } : q);
+            return next;
+        });
 
-        const handleOpponentBuzz = async (opponent) => {
-            setQuestionTimeRemaining(5);
+        // schedule selection after 2s (clear previous timeout if any)
+        if (opponentSelectTimeoutRef.current) {
+            clearTimeout(opponentSelectTimeoutRef.current);
+            opponentSelectTimeoutRef.current = null;
+        }
+        opponentSelectTimeoutRef.current = setTimeout(() => {
+            setBoard(prev => {
+                const next = { ...prev };
+                next[category] = next[category].map((q, i) => i === rowIndex ? { ...q, wasAsked: true, selected: false } : q);
+                return next;
+            });
 
-            if (opponent === "opponent1") {
-                const correct = Math.random() < 0.8;
-                setAnswerCorrect(correct);
+            // create selectedQuestion object (include category and value)
+            const selected = { ...board[category][rowIndex], category, value: values[rowIndex] };
+            setSelectedQuestion(selected);
 
-                if (correct) {
-                    setAnswerShown(true);
-                    const timeoutId = setTimeout(() => {
-                        setAnswerShown(false);
-                        setOpponent1BuzzedIn(false);
-                        clearTimeout(timeoutId);
-                    }, 4000);
-
-                    setOpponent1Score(prev => prev + selectedQuestion.value);
-                } else {
-                    try {
-                        const res = await fetch("http://localhost:3001/api/wrong", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                                question: selectedQuestion.question,
-                                answer: selectedQuestion.answer
-                            })
-                        });
-                        const data = await res.json();
-                        console.log("Opponent 1 wrong answer comment:", data.comment);
-
-                        setAnswerShown(true);
-                        const timeoutId = setTimeout(() => {
-                            setAnswerShown(false);
-                            setOpponent1BuzzedIn(false);
-                            clearTimeout(timeoutId);
-                        }, 4000);
-
-                        setOpponent1Score(prev => prev - selectedQuestion.value);
-                    } catch (err) {
-                        console.error("Failed to get wrong answer comment:", err);
-                    }
-                }
-            }
-
-            if (opponent === "opponent2") {
-                setAnswerShown(true);
-                const timeoutId = setTimeout(() => {
-                    setAnswerShown(false);
-                    setOpponent2BuzzedIn(false);
-                    clearTimeout(timeoutId);
-                }, 4000);
-
-                setOpponent2Score(prev => prev + selectedQuestion.value);
-            }
-        };
-
-        if (opponent1BuzzedIn) handleOpponentBuzz("opponent1");
-        if (opponent2BuzzedIn) handleOpponentBuzz("opponent2");
-
-    }, [opponent1BuzzedIn, opponent2BuzzedIn, selectedQuestion]);
-
-    */
+            opponentSelectTimeoutRef.current = null;
+        }, 2000);
+    }
 
 
-    const categories = Object.keys(board);
+    async function readQuestion(question) {
+        await sayTts(question.question);
+        setQuestionReady(true);
+    }
 
     async function sayTts(text) {
         try {
@@ -261,6 +271,12 @@ export default function JeopardyNew() {
             audio.playbackRate = 1.25;
 
             await audio.play();
+
+            // Wait until playback finishes
+            await new Promise(resolve => {
+                audio.addEventListener("ended", resolve, { once: true });
+            });
+
             return audio;
         } catch (err) {
             console.error("TTS error:", err);
@@ -268,107 +284,12 @@ export default function JeopardyNew() {
         }
     }
 
-    async function askQuestion(questionText) {
-        const audio = await sayTts(questionText);
-        if (!audio) return;
-
-        audio.addEventListener("ended", () => {
-            setQuestionRead(true);
-            console.log("Question read completed, setQuestionRead(true)");
-        });
-    }
-
-
-    async function makeComment(contextDescription) {
-        try {
-            console.log("Making comment:", contextDescription);
-            const response = await fetch("http://localhost:3001/api/comment", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ contextDescription })
-            });
-            if (!response.ok) throw new Error("TTS request failed");
-            const audioBlob = await response.blob();
-            const audioUrl = URL.createObjectURL(audioBlob);
-            const audio = new Audio(audioUrl);
-            audio.playbackRate = 1.25;
-            audio.onended = () => URL.revokeObjectURL(audioUrl);
-            await audio.play();
-        } catch (err) {
-            console.error("TTS error:", err);
-        }
-    }
-
-    async function handleQuestionSelect(category, question) {
-        console.log("Selected question:", question.question);
-        setBoard(prevBoard => {
-            const newBoard = { ...prevBoard };
-            newBoard[category] = newBoard[category].map(q =>
-                q.question === question.question ? { ...q, wasAsked: true } : q
-            );
-            return newBoard;
-        });
-        setSelectedQuestion(question);
-        setAnswerTimeRemaining(8);
-        setBuzzedIn(false);
-        askQuestion(question.question);
-    }
-
-    async function handleBuzzIn() {
-        setBuzzedIn(true);
-        console.log("Player buzzed in!");
-        buzzIn.play();
-    }
-
-    function areSimilar(str1, str2, threshold = 0.9) {
-        const distance = levenshtein.get(str1.toLowerCase(), str2.toLowerCase());
-        const maxLen = Math.max(str1.length, str2.length);
-        const similarity = 1 - distance / maxLen;
-        return similarity >= threshold;
-    }
-
-    function getOppAnswerInfo() {
-        const opps = [
-            {
-                name: gameData.opponent1.name,
-                knows: (gameData.opponent1.difficulty * 5 + 45) / 100 > Math.random()
-            },
-            {
-                name: gameData.opponent2.name,
-                knows: (gameData.opponent2.difficulty * 5 + 45) / 100 > Math.random()
-            }
-        ];
-
-        const getBuzzTime = () => {
-            const r = Math.random();
-            if (r < 0.5) return 150 + Math.random() * (500 - 150);
-            else if (r < 0.75) return 500 + Math.random() * (1000 - 500);
-            else if (r < 0.95) return 1000 + Math.random() * (2000 - 1000);
-            else return 2000 + Math.random() * (4000 - 2000);
-        };
-
-        opps.forEach(opp => {
-            opp.buzzTime = opp.knows ? getBuzzTime() : Infinity;
-        });
-
-        const firstToBuzz = opps.reduce((fastest, opp) =>
-            opp.buzzTime < fastest.buzzTime ? opp : fastest
-        );
-
-        if (firstToBuzz.buzzTime === Infinity) return null;
-
-        console.log("Opponent buzz info:", firstToBuzz);
-        return {
-            opponent: firstToBuzz.name,
-            reactionTime: firstToBuzz.buzzTime
-        };
-    }
 
     return (
         <div className="bg-[#060CE9] min-h-screen flex flex-col items-center justify-center p-4">
-            {loading ? (
+            {(boardLoading || !Object.keys(board).length) ? (
                 <p className="text-white text-2xl font-bold">Loading board...</p>
-            ) : selectedQuestion && !playerWrong && !opponent1BuzzedIn && !opponent2BuzzedIn && questionTimeRemaining ? (
+            ) : selectedQuestion ? (
                 <div className="flex flex-col items-center justify-center gap-4 min-h-screen bg-[#060CE9] p-4">
                     <div
                         className="text-white text-center px-6 py-8 rounded-lg"
@@ -379,7 +300,7 @@ export default function JeopardyNew() {
                         </p>
                     </div>
 
-                    {questionRead && !buzzedIn && (
+                    {questionReady && (
                         <div className="flex flex-col items-center">
                             <button
                                 className="border border-2 border-yellow-400 text-xl font-semibold text-yellow-500 rounded-lg p-2 cursor-pointer hover:bg-yellow-500 hover:text-white"
@@ -495,7 +416,7 @@ export default function JeopardyNew() {
                     </div>
 
                     <div className="grid grid-cols-6 gap-1 border-[3px] border-yellow-400">
-                        {categories.map((cat, i) => (
+                        {Object.keys(board).map((cat, i) => (
                             <div
                                 key={`cat-${i}`}
                                 className="bg-[#060CE9] text-yellow-300 text-center text-xl font-bold border border-yellow-400 uppercase flex items-center justify-center h-20 tracking-wide"
@@ -506,17 +427,19 @@ export default function JeopardyNew() {
                         ))}
 
                         {values.map((val, rowIndex) =>
-                            categories.map((cat, colIndex) => {
-                                const question = board[cat][rowIndex];
+                            Object.keys(board).map((cat, colIndex) => {
+                                const question = board[cat]?.[rowIndex];
+                                if (!question) return <div key={`empty-${colIndex}-${rowIndex}`} className="bg-[#060CE9] border border-yellow-400 h-24" />;
                                 return (
                                     <div
                                         key={`cell-${colIndex}-${rowIndex}`}
-                                        className={`${question?.wasAsked ? "invisible" : "visible"} bg-[#060CE9] text-yellow-300 text-center text-3xl font-extrabold border border-yellow-400 flex items-center justify-center h-24 cursor-pointer hover:bg-[#0a14e0] transition-all duration-300`}
+                                        className={`${question?.wasAsked ? "invisible" : "visible"} ${question.selected ? 'border-4 border-green-500 bg-yellow-400' : 'border-2 border-yellow-400 bg-[#060CE9]'} 
+                                            text-yellow-300 text-center text-3xl font-extrabold flex items-center justify-center h-24 cursor-pointer hover:bg-[#0a14e0] transition-all duration-300`}
                                         style={{
                                             fontFamily: "Impact, 'Anton', 'Arial Black', sans-serif",
                                             textShadow: "2px 2px 3px black"
                                         }}
-                                        onClick={() => handleQuestionSelect(cat, { ...question, value: values[rowIndex] })}
+                                        onClick={() => handlePlayerQuestionSelect(cat, rowIndex)}
                                     >
                                         ${val}
                                     </div>
