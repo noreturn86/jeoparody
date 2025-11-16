@@ -5,9 +5,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import OpenAI from "openai";
 
-if (process.env.NODE_ENV === "production") {
-  dotenv.config({ path: ".env.production" });
-} else {
+if (process.env.NODE_ENV !== "production") {
   dotenv.config({ path: ".env.development" });
 }
 
@@ -15,19 +13,16 @@ const { Pool } = pkg;
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+app.use(cors({
+  origin: "https://jeoparody.vercel.app",
+  credentials: true
+}));
+
 app.use(express.json());
 
 const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: parseInt(process.env.DB_PORT, 10),
-  ssl:
-    process.env.DB_SSL === "true"
-      ? { rejectUnauthorized: false }
-      : false,
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
 });
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
