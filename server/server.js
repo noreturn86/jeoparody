@@ -14,7 +14,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors({
-  origin: "https://jeoparody.vercel.app",
+  origin: "https://www.jeoparody.com",
   credentials: true
 }));
 
